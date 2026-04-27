@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --font-hand: "Patrick Hand", cursive;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+@keyframes note-appear {
+  from { opacity: 0; scale: 0.85; }
+  to { opacity: 1; scale: 1; }
+}
+
+@keyframes note-disappear {
+  from { opacity: 1; scale: 1; }
+  to { opacity: 0; scale: 0.85; }
+}
+
+.note-enter {
+  animation: note-appear 0.2s ease-out both;
+}
+
+.note-exit {
+  animation: note-disappear 0.15s ease-in both;
+}
