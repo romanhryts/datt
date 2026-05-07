@@ -7,8 +7,6 @@ export interface NotesContextValue {
   updateNote: (data: NoteUpdate) => void;
   removeNote: (id: string) => void;
   bringToFront: (id: string) => void;
-  isDraggingAny: boolean;
-  setDraggingAny: (v: boolean) => void;
 }
 
 export const NotesContext = createContext<NotesContextValue | null>(null);

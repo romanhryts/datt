@@ -1,6 +1,7 @@
 import { type CSSProperties, useRef, useState } from 'react';
 import { useNotes } from '../../hooks/useNotes';
 import { useDropZone } from '../../hooks/useDropZone';
+import { BoardRectProvider } from '../../context/BoardRectContext';
 import { StickyNote } from '../StickyNote/StickyNote';
 import { TrashZone } from '../TrashZone/TrashZone';
 import { NOTE_DEFAULT_WIDTH, NOTE_DEFAULT_HEIGHT, DEFAULT_COLOR, TRASH_ZONE_HEIGHT } from '../../utils/constants';
@@ -34,26 +35,28 @@ export function Board() {
   };
 
   return (
-    <div
-      ref={boardRef}
-      className="relative w-full h-full font-sans overflow-hidden"
-      style={boardStyle}
-      onDoubleClick={handleDoubleClick}
-    >
-      {notes.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <p className="text-gray-400 text-lg font-sans">Double-click to create a note</p>
-        </div>
-      )}
-      {notes.map((note) => (
-        <StickyNote
-          key={note.id}
-          note={note}
-          trashZoneRef={trashRef}
-          onTrashHover={setTrashHovered}
-        />
-      ))}
-      <TrashZone ref={trashRef} isHovered={trashHovered} />
-    </div>
+    <BoardRectProvider value={boardRef}>
+      <div
+        ref={boardRef}
+        className="relative w-full h-full font-sans overflow-hidden"
+        style={boardStyle}
+        onDoubleClick={handleDoubleClick}
+      >
+        {notes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <p className="text-gray-400 text-lg font-sans">Double-click to create a note</p>
+          </div>
+        )}
+        {notes.map((note) => (
+          <StickyNote
+            key={note.id}
+            note={note}
+            trashZoneRef={trashRef}
+            onTrashHover={setTrashHovered}
+          />
+        ))}
+        <TrashZone ref={trashRef} isHovered={trashHovered} />
+      </div>
+    </BoardRectProvider>
   );
 }

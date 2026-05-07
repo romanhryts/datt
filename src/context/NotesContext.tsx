@@ -2,7 +2,6 @@ import {
   useReducer,
   useEffect,
   useCallback,
-  useState,
   type ReactNode,
 } from 'react';
 import type { Note, NoteCreate, NoteUpdate } from '../types/Note';
@@ -31,10 +30,17 @@ function notesReducer(state: Note[], action: Action): Note[] {
     case 'REMOVE':
       return state.filter((n) => n.id !== action.payload);
     case 'BRING_TO_FRONT': {
+      const target = state.find((n) => n.id === action.payload);
+      if (!target) return state;
       const maxZ = state.reduce((m, n) => Math.max(m, n.zIndex), Z_INDEX_BASE);
-      return state.map((n) =>
-        n.id === action.payload ? { ...n, zIndex: maxZ + 1 } : n,
-      );
+      // Already on top — no-op (preserve referential identity)
+      if (target.zIndex === maxZ) return state;
+      // Normalize: reassign sequential z-indices to prevent unbounded growth
+      const sorted = [...state].sort((a, b) => a.zIndex - b.zIndex);
+      return sorted.map((n, i) => ({
+        ...n,
+        zIndex: Z_INDEX_BASE + i + (n.id === action.payload ? state.length : 0),
+      }));
     }
     default:
       return state;
@@ -43,7 +49,6 @@ function notesReducer(state: Note[], action: Action): Note[] {
 
 export function NotesProvider({ children }: { children: ReactNode }) {
   const [notes, dispatch] = useReducer(notesReducer, []);
-  const [isDraggingAny, setDraggingAny] = useState(false);
 
   useEffect(() => {
     api.fetchNotes().then((loaded) => dispatch({ type: 'SET_ALL', payload: loaded }));
@@ -82,9 +87,17 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const bringToFront = useCallback((id: string) => {
-    dispatch({ type: 'BRING_TO_FRONT', payload: id });
+    const target = notes.find((n) => n.id === id);
+    if (!target) return;
     const maxZ = notes.reduce((m, n) => Math.max(m, n.zIndex), Z_INDEX_BASE);
-    api.updateNote({ id, zIndex: maxZ + 1 });
+    if (target.zIndex === maxZ) return; // already on top
+    dispatch({ type: 'BRING_TO_FRONT', payload: id });
+    // Persist normalized z-indices for all notes
+    const sorted = [...notes].sort((a, b) => a.zIndex - b.zIndex);
+    sorted.forEach((n, i) => {
+      const newZ = Z_INDEX_BASE + i + (n.id === id ? notes.length : 0);
+      if (n.zIndex !== newZ) api.updateNote({ id: n.id, zIndex: newZ });
+    });
   }, [notes]);
 
   return (
@@ -95,8 +108,6 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         updateNote,
         removeNote,
         bringToFront,
-        isDraggingAny,
-        setDraggingAny,
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import { type CSSProperties, forwardRef } from 'react';
 import { TRASH_ZONE_HEIGHT } from '../../utils/constants';
-import { useNotes } from '../../hooks/useNotes';
+import { useDragState } from '../../context/DragStateContext';
 import { cn } from '../../utils/cn';
 
 interface TrashZoneProps {
@@ -11,7 +11,7 @@ const containerStyle: CSSProperties = { height: TRASH_ZONE_HEIGHT };
 
 export const TrashZone = forwardRef<HTMLDivElement, TrashZoneProps>(
   function TrashZone({ isHovered }, ref) {
-    const { isDraggingAny } = useNotes();
+    const { isDraggingAny } = useDragState();
 
     return (
       <div

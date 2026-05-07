@@ -38,5 +38,11 @@ export function useDrag(options: UseDragOptions) {
     optionsRef.current.onDragEnd?.(dx, dy);
   }, []);
 
-  return { handlePointerDown, handlePointerMove, handlePointerUp };
+  const handlePointerCancel = useCallback(() => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    origin.current = null;
+  }, []);
+
+  return { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel };
 }

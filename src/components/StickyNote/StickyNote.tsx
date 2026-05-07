@@ -1,12 +1,19 @@
-import { type CSSProperties, useState, useRef, useEffect } from 'react';
+import { type CSSProperties, useState, useRef, memo } from 'react';
 import type { Note } from '../../types/Note';
 import { useNotes } from '../../hooks/useNotes';
-import { useDrag } from '../../hooks/useDrag';
+import { useMoveDrag } from '../../hooks/useMoveDrag';
+import { useResizeDrag } from '../../hooks/useResizeDrag';
 import { ColorPicker } from '../ColorPicker/ColorPicker';
-import { clamp } from '../../utils/clamp';
-import { NOTE_MIN_WIDTH, NOTE_MIN_HEIGHT, TRASH_ZONE_HEIGHT } from '../../utils/constants';
 
 const textareaStyle: CSSProperties = { color: 'rgba(0,0,0,0.8)' };
+
+function computeRotation(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  return (h % 600) / 200; // range approx -3..+3
+}
 
 interface StickyNoteProps {
   note: Note;
@@ -14,86 +21,28 @@ interface StickyNoteProps {
   onTrashHover: (hovering: boolean) => void;
 }
 
-export function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps) {
-  const { updateNote, removeNote, bringToFront, setDraggingAny } = useNotes();
+export const StickyNote = memo(function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps) {
+  const { updateNote, removeNote, bringToFront } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [showColors, setShowColors] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const noteRef = useRef<HTMLDivElement>(null);
 
-  // Transient drag state kept in refs for performance
-  const dragPos = useRef({ x: note.x, y: note.y });
-  const dragSize = useRef({ w: note.width, h: note.height });
-
-  // Sync refs when note changes from outside
-  useEffect(() => {
-    dragPos.current = { x: note.x, y: note.y };
-    dragSize.current = { w: note.width, h: note.height };
-  }, [note.x, note.y, note.width, note.height]);
-
-  const checkTrashOverlap = () => {
-    const el = noteRef.current;
-    const zone = trashZoneRef.current;
-    if (!el || !zone) return false;
-    const nr = el.getBoundingClientRect();
-    const zr = zone.getBoundingClientRect();
-    return nr.bottom >= zr.top && nr.right > zr.left && nr.left < zr.right;
-  };
-
-  // Move drag 
-  const moveStartPos = useRef({ x: 0, y: 0 });
-
-  const moveDrag = useDrag({
-    onDragStart: () => {
-      moveStartPos.current = { x: note.x, y: note.y };
-      dragPos.current = { x: note.x, y: note.y };
-      bringToFront(note.id);
-      setDraggingAny(true);
-    },
-    onDragMove: (dx, dy) => {
-      const boardW = window.innerWidth;
-      const boardH = window.innerHeight - TRASH_ZONE_HEIGHT;
-      const newX = clamp(moveStartPos.current.x + dx, 0, boardW - note.width);
-      const newY = clamp(moveStartPos.current.y + dy, 0, boardH - note.height);
-      dragPos.current = { x: newX, y: newY };
-      if (noteRef.current) {
-        noteRef.current.style.left = `${newX}px`;
-        noteRef.current.style.top = `${newY}px`;
-      }
-      onTrashHover(checkTrashOverlap());
-    },
-    onDragEnd: () => {
-      setDraggingAny(false);
-      onTrashHover(false);
-      if (checkTrashOverlap()) {
-        removeNote(note.id);
-      } else {
-        updateNote({ id: note.id, x: dragPos.current.x, y: dragPos.current.y });
-      }
-    },
+  const moveDrag = useMoveDrag({
+    note,
+    noteRef,
+    trashZoneRef,
+    onTrashHover,
+    bringToFront,
+    updateNote,
+    removeNote,
   });
 
-  // Resize drag
-  const resizeStartSize = useRef({ w: 0, h: 0 });
-
-  const resizeDrag = useDrag({
-    onDragStart: () => {
-      resizeStartSize.current = { w: note.width, h: note.height };
-      dragSize.current = { w: note.width, h: note.height };
-      bringToFront(note.id);
-    },
-    onDragMove: (dx, dy) => {
-      const newW = Math.max(NOTE_MIN_WIDTH, resizeStartSize.current.w + dx);
-      const newH = Math.max(NOTE_MIN_HEIGHT, resizeStartSize.current.h + dy);
-      dragSize.current = { w: newW, h: newH };
-      if (noteRef.current) {
-        noteRef.current.style.width = `${newW}px`;
-        noteRef.current.style.height = `${newH}px`;
-      }
-    },
-    onDragEnd: () => {
-      updateNote({ id: note.id, width: dragSize.current.w, height: dragSize.current.h });
-    },
+  const resizeDrag = useResizeDrag({
+    note,
+    noteRef,
+    bringToFront,
+    updateNote,
   });
 
   const handleBodyClick = () => {
@@ -117,16 +66,9 @@ export function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps
     setShowColors(false);
   };
 
-  const handleMouseDown = () => {
-    bringToFront(note.id);
-  };
 
-  // Stable random rotation seeded from note id
-  let hash = 0;
-  for (let i = 0; i < note.id.length; i++) {
-    hash = (hash * 31 + note.id.charCodeAt(i)) | 0;
-  }
-  const rotation = (hash % 600) / 200; // range approx -3..+3
+  // Stable random rotation seeded from note id — computed once on mount
+  const rotation = useRef(computeRotation(note.id)).current;
 
   const noteStyle: CSSProperties = {
     left: note.x,
@@ -154,13 +96,13 @@ export function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps
       ref={noteRef}
       className="note-enter absolute flex flex-col rounded-md shadow-lg select-none"
       style={noteStyle}
-      onMouseDown={handleMouseDown}
     >
       <div
         className="flex items-center justify-between px-2 py-1 cursor-grab active:cursor-grabbing border-b border-black/10"
         onPointerDown={moveDrag.handlePointerDown}
         onPointerMove={moveDrag.handlePointerMove}
         onPointerUp={moveDrag.handlePointerUp}
+        onPointerCancel={moveDrag.handlePointerCancel}
       >
         <div className="flex items-center gap-1">
           <button
@@ -200,6 +142,7 @@ export function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps
         onPointerDown={resizeDrag.handlePointerDown}
         onPointerMove={resizeDrag.handlePointerMove}
         onPointerUp={resizeDrag.handlePointerUp}
+        onPointerCancel={resizeDrag.handlePointerCancel}
       >
         <svg
           viewBox="0 0 16 16"
@@ -213,4 +156,4 @@ export function StickyNote({ note, trashZoneRef, onTrashHover }: StickyNoteProps
       </div>
     </div>
   );
-}
+});
